@@ -1,8 +1,9 @@
-from mycroft.skills.core import MycroftSkill, intent_file_handler
-from mycroft.util.log import LOG
+from core.skills.core import MycroftSkill, intent_file_handler
+from core.util.log import LOG
 from os.path import join, expanduser, abspath
 import os
 import sys
+import time
 
 
 class LinuxSkill(MycroftSkill):
@@ -11,7 +12,8 @@ class LinuxSkill(MycroftSkill):
 
     def initialize(self):
 
-        mycroft_core_path = os.path.join(os.path.dirname(sys.modules['mycroft'].__file__), '..')
+        mycroft_core_path = os.path.join(os.path.dirname(
+            sys.modules['mycroft'].__file__), '..')
         self.mycroft_core_path = os.path.abspath(mycroft_core_path)
 
         print("mycroft-core path:", mycroft_core_path)
@@ -23,6 +25,8 @@ class LinuxSkill(MycroftSkill):
         """
         Shuts down mycroft modules not the OS
         """
+        self.speak_dialog('shutdown.core')
+        time.sleep(2)
         path = join(self.mycroft_core_path, 'stop-mycroft.sh')
         LOG.info(path)
         os.system(path)
@@ -31,6 +35,8 @@ class LinuxSkill(MycroftSkill):
         """
         Restart mycroft modules not the OS
         """
+        self.speak_dialog('restart.core')
+        time.sleep(2)
         path = join(self.mycroft_core_path, 'start-mycroft.sh all restart')
         LOG.info(path)
         os.system(path)
