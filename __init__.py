@@ -3,6 +3,7 @@ from core.util.log import LOG
 from os.path import join, expanduser, abspath
 import os
 import sys
+import time
 
 
 class LinuxSkill(MycroftSkill):
@@ -23,6 +24,8 @@ class LinuxSkill(MycroftSkill):
         """
         Shuts down mycroft modules not the OS
         """
+        self.speak_dialog('shutdown.core')
+        time.sleep(2)
         path = join(self.mycroft_core_path, 'stop-mycroft.sh')
         LOG.info(path)
         os.system(path)
@@ -31,6 +34,8 @@ class LinuxSkill(MycroftSkill):
         """
         Restart mycroft modules not the OS
         """
+        self.speak_dialog('restart.core')
+        time.sleep(2)
         path = join(self.mycroft_core_path, 'start-mycroft.sh all restart')
         LOG.info(path)
         os.system(path)
