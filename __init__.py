@@ -1,5 +1,5 @@
-from mycroft.skills.core import MycroftSkill, intent_file_handler
-from mycroft.util.log import LOG
+from core.skills.core import MycroftSkill, intent_file_handler
+from core.util.log import LOG
 from os.path import join, expanduser, abspath
 import os
 import sys
@@ -11,7 +11,7 @@ class LinuxSkill(MycroftSkill):
 
     def initialize(self):
 
-        mycroft_core_path = os.path.join(os.path.dirname(sys.modules['mycroft'].__file__), '..')
+        mycroft_core_path = os.path.join(os.path.dirname(sys.modules['core'].__file__), '..')
         self.mycroft_core_path = os.path.abspath(mycroft_core_path)
 
         print("mycroft-core path:", mycroft_core_path)
