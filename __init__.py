@@ -6,8 +6,6 @@ from os.path import join
 
 from core.messagebus.message import Message
 from core.skills import Skill, intent_handler
-from core.util.log import LOG
-
 
 class CoreSkill(Skill):
     def __init__(self):
@@ -38,7 +36,7 @@ class CoreSkill(Skill):
         self.speak_dialog('shutdown.core')
         time.sleep(2)
         path = join(self.core_path, 'stop-mycroft.sh')
-        LOG.info(path)
+        self.log.info(path)
         os.system(path)
 
     def handler_core_reboot(self, message):
@@ -48,7 +46,7 @@ class CoreSkill(Skill):
         self.speak_dialog('restart.core')
         time.sleep(2)
         path = join(self.core_path, 'start-mycroft.sh all restart')
-        LOG.info(path)
+        self.log.info(path)
         os.system(path)
 
     def handle_system_reboot(self, _):
@@ -61,7 +59,6 @@ class CoreSkill(Skill):
     def shutdown(self):
         self.remove_event('core.shutdown', self.handler_core_shutdown)
         self.remove_event('core.reboot', self.handler_core_reboot)
-
 
 def create_skill():
     return CoreSkill()
