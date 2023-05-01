@@ -1,48 +1,67 @@
-from core.skills.core import MycroftSkill, intent_file_handler
-from core.util.log import LOG
-from os.path import join, expanduser, abspath
 import os
+import subprocess
 import sys
 import time
+from os.path import join
+
+from core.messagebus.message import Message
+from core.skills import Skill, intent_handler
+from core.util.log import LOG
 
 
-class LinuxSkill(MycroftSkill):
+class CoreSkill(Skill):
     def __init__(self):
-        super(LinuxSkill, self).__init__(name="LinuxSkill")
+        super(CoreSkill, self).__init__(name="CoreSkill")
 
     def initialize(self):
+        core_path = os.path.join(os.path.dirname(sys.modules['core'].__file__),
+                                         '..')
+        self.core_path = os.path.abspath(core_path)
+        self.add_event('core.shutdown', self.handler_core_shutdown)
+        self.add_event('core.reboot', self.handler_core_reboot)
 
-        mycroft_core_path = os.path.join(os.path.dirname(sys.modules['core'].__file__), '..')
-        self.mycroft_core_path = os.path.abspath(mycroft_core_path)
+    # change yes to a a Vocabulary for flexibility
+    @intent_handler("reboot.intent")
+    def handle_reboot(self, event):
+        if self.ask_yesno("confirm.reboot") == "yes":
+            self.bus.emit(Message("core.reboot"))
 
-        print("mycroft-core path:", mycroft_core_path)
+    @intent_handler("shutdown.intent")
+    def handle_shutdown(self, event):
+        if self.ask_yesno("confirm.shutdown") == "yes":
+            self.bus.emit(Message("core.shutdown"))
 
-        self.add_event('system.shutdown', self.handler_system_shutdown)
-        self.add_event('system.reboot', self.handler_system_reboot)
-
-    def handler_system_shutdown(self, message):
+    def handler_core_shutdown(self, message):
         """
         Shuts down mycroft modules not the OS
         """
         self.speak_dialog('shutdown.core')
         time.sleep(2)
-        path = join(self.mycroft_core_path, 'stop-mycroft.sh')
+        path = join(self.core_path, 'stop-mycroft.sh')
         LOG.info(path)
         os.system(path)
 
-    def handler_system_reboot(self, message):
+    def handler_core_reboot(self, message):
         """
         Restart mycroft modules not the OS
         """
         self.speak_dialog('restart.core')
         time.sleep(2)
-        path = join(self.mycroft_core_path, 'start-mycroft.sh all restart')
+        path = join(self.core_path, 'start-mycroft.sh all restart')
         LOG.info(path)
         os.system(path)
 
-    def stop(self):
-        pass
+    def handle_system_reboot(self, _):
+        self.speak_dialog("rebooting", wait=True)
+        subprocess.call(["/usr/bin/systemctl", "reboot"])
+
+    def handle_system_shutdown(self, _):
+        subprocess.call(["/usr/bin/systemctl", "poweroff"])
+
+    def shutdown(self):
+        self.remove_event('core.shutdown', self.handler_core_shutdown)
+        self.remove_event('core.reboot', self.handler_core_reboot)
 
 
 def create_skill():
-    return LinuxSkill()
+    return CoreSkill()
