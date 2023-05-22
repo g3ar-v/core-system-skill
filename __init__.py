@@ -35,7 +35,7 @@ class CoreSkill(Skill):
         """
         self.speak_dialog('shutdown.core')
         time.sleep(2)
-        path = join(self.core_path, 'stop-mycroft.sh')
+        path = join(self.core_path, 'stop-core.sh')
         self.log.info(path)
         os.system(path)
 
@@ -45,7 +45,7 @@ class CoreSkill(Skill):
         """
         self.speak_dialog('restart.core')
         time.sleep(2)
-        path = join(self.core_path, 'start-mycroft.sh all restart')
+        path = join(self.core_path, 'start-core.sh all restart')
         self.log.info(path)
         os.system(path)
 
