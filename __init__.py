@@ -7,16 +7,19 @@ from os.path import join
 from core.messagebus.message import Message
 from core.skills import Skill, intent_handler
 
+
 class CoreSkill(Skill):
     def __init__(self):
         super(CoreSkill, self).__init__(name="CoreSkill")
 
     def initialize(self):
         core_path = os.path.join(os.path.dirname(sys.modules['core'].__file__),
-                                         '..')
+                                 '..')
         self.core_path = os.path.abspath(core_path)
-        self.add_event('core.shutdown', self.handler_core_shutdown)
-        self.add_event('core.reboot', self.handler_core_reboot)
+        self.add_event('core.shutdown', self.handle_core_shutdown)
+        self.add_event('core.reboot', self.handle_core_reboot)
+        self.add_event('question:query', self.handle_response)
+        self.add_event('recognizer_loop:audio_output_start', self.handle_output)
 
     # change yes to a a Vocabulary for flexibility
     @intent_handler("reboot.intent")
@@ -29,7 +32,18 @@ class CoreSkill(Skill):
         if self.ask_yesno("confirm.shutdown") == "yes":
             self.bus.emit(Message("core.shutdown"))
 
-    def handler_core_shutdown(self, message):
+    def handle_response(self, message):
+        # self.timeout_time = time.time() + 4
+        self.schedule_event(self.taking_too_long, when=4, name='GiveMeAMinute')
+
+    def taking_too_long(self, event):
+        self.bus.emit(Message('recognizer_loop:audio_output_timeout'))
+        self.cancel_scheduled_event('GiveMeAMinute')
+
+    def handle_output(self):
+        self.cancel_scheduled_event('GiveMeAMinute')
+
+    def handle_core_shutdown(self, message):
         """
         Shuts down mycroft modules not the OS
         """
@@ -39,7 +53,7 @@ class CoreSkill(Skill):
         self.log.info(path)
         os.system(path)
 
-    def handler_core_reboot(self, message):
+    def handle_core_reboot(self, message):
         """
         Restart mycroft modules not the OS
         """
@@ -57,8 +71,9 @@ class CoreSkill(Skill):
         subprocess.call(["/usr/bin/systemctl", "poweroff"])
 
     def shutdown(self):
-        self.remove_event('core.shutdown', self.handler_core_shutdown)
-        self.remove_event('core.reboot', self.handler_core_reboot)
+        self.remove_event('core.shutdown', self.handle_core_shutdown)
+        self.remove_event('core.reboot', self.handle_core_reboot)
+
 
 def create_skill():
     return CoreSkill()
