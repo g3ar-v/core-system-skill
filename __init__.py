@@ -1,11 +1,15 @@
 import os
+import re
 import subprocess
 import sys
 import time
 from os.path import join
 
+from adapt.intent import IntentBuilder
 from core.messagebus.message import Message
 from core.skills import Skill, intent_handler
+
+SECONDS = 6
 
 
 class CoreSkill(Skill):
@@ -19,6 +23,7 @@ class CoreSkill(Skill):
         self.add_event('core.shutdown', self.handle_core_shutdown)
         self.add_event('core.reboot', self.handle_core_reboot)
         self.add_event('question:query', self.handle_response)
+        self.add_event('question:action', self.handle_output)
         self.add_event('recognizer_loop:audio_output_start', self.handle_output)
 
     # change yes to a a Vocabulary for flexibility
@@ -33,8 +38,9 @@ class CoreSkill(Skill):
             self.bus.emit(Message("core.shutdown"))
 
     def handle_response(self, message):
-        # self.timeout_time = time.time() + 4
-        self.schedule_event(self.taking_too_long, when=4, name='GiveMeAMinute')
+        """ Send notification to user that processing is longer than usual"""
+        self.schedule_event(self.taking_too_long, when=SECONDS,
+                            name='GiveMeAMinute')
 
     def taking_too_long(self, event):
         self.bus.emit(Message('recognizer_loop:audio_output_timeout'))
@@ -69,6 +75,19 @@ class CoreSkill(Skill):
 
     def handle_system_shutdown(self, _):
         subprocess.call(["/usr/bin/systemctl", "poweroff"])
+
+    @intent_handler(IntentBuilder("").require("Speak").require("Words"))
+    def speak_back(self, message):
+        """
+            Repeat the utterance back to the user.
+
+            TODO: The method is very english centric and will need
+                  localization.
+        """
+        # Remove everything up to the speak keyword and repeat that
+        utterance = message.data.get('utterance')
+        repeat = re.sub('^.*?' + message.data['Speak'], '', utterance)
+        self.speak(repeat.strip())
 
     def shutdown(self):
         self.remove_event('core.shutdown', self.handle_core_shutdown)
