@@ -89,6 +89,12 @@ class CoreSkill(Skill):
         repeat = re.sub('^.*?' + message.data['Speak'], '', utterance)
         self.speak(repeat.strip())
 
+    @intent_handler(IntentBuilder('dismiss.mycroft').require('Nevermind'))
+    def handle_dismiss_intent(self, message):
+        if self.settings.get('verbal_feedback_enabled', True):
+            self.speak_dialog('dismissed')
+        self.log.info("User dismissed Mycroft.")
+
     def shutdown(self):
         self.remove_event('core.shutdown', self.handle_core_shutdown)
         self.remove_event('core.reboot', self.handle_core_reboot)
