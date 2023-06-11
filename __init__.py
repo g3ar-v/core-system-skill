@@ -36,7 +36,7 @@ class CoreSkill(Skill):
         else:
             self.speak_dialog('dismissal.reboot', {'users_word': ''.join([self.users_word, 'ing'])})
 
-    @intent_handler(IntentBuilder("").require("Shutdown").optionally("System"))
+    @intent_handler(IntentBuilder("").require("Shutdown").require("System"))
     def handle_shutdown_request(self, message):
         self.users_word = message.data["Shutdown"]
         if self.ask_yesno("confirm.shutdown", {'users_word': self.users_word}) == "yes":
