@@ -9,7 +9,7 @@ from adapt.intent import IntentBuilder
 from core.messagebus.message import Message
 from core.skills import Skill, intent_handler
 
-SECONDS = 6
+SECONDS = 5
 
 
 class CoreSkill(Skill):
@@ -20,6 +20,7 @@ class CoreSkill(Skill):
         core_path = os.path.join(os.path.dirname(sys.modules['core'].__file__),
                                  '..')
         self.core_path = os.path.abspath(core_path)
+        self.add_event("core.skills.initialized", self.handle_boot_finished)
         self.add_event('core.shutdown', self.handle_core_shutdown)
         self.add_event('core.reboot', self.handle_core_reboot)
         self.add_event('question:query', self.handle_response)
@@ -27,15 +28,21 @@ class CoreSkill(Skill):
         self.add_event('recognizer_loop:audio_output_start', self.handle_output)
 
     # change yes to a a Vocabulary for flexibility
-    @intent_handler("reboot.intent")
-    def handle_reboot(self, event):
-        if self.ask_yesno("confirm.reboot") == "yes":
+    @intent_handler(IntentBuilder('').require('Reboot'))
+    def handle_reboot_request(self, message):
+        self.users_word = message.data["Reboot"]
+        if self.ask_yesno("confirm.reboot", {'users_word': self.users_word}) == "yes":
             self.bus.emit(Message("core.reboot"))
+        else:
+            self.speak_dialog('dismissal.reboot', {'users_word': ''.join([self.users_word, 'ing'])})
 
-    @intent_handler("shutdown.intent")
-    def handle_shutdown(self, event):
-        if self.ask_yesno("confirm.shutdown") == "yes":
+    @intent_handler(IntentBuilder("").require("Shutdown").optionally("System"))
+    def handle_shutdown_request(self, message):
+        self.users_word = message.data["Shutdown"]
+        if self.ask_yesno("confirm.shutdown", {'users_word': self.users_word}) == "yes":
             self.bus.emit(Message("core.shutdown"))
+        else:
+            self.speak_dialog('dismissal.shutdown')
 
     def handle_response(self, message):
         """ Send notification to user that processing is longer than usual"""
@@ -56,17 +63,15 @@ class CoreSkill(Skill):
         self.speak_dialog('shutdown.core')
         time.sleep(2)
         path = join(self.core_path, 'stop-core.sh')
-        self.log.info(path)
         os.system(path)
 
     def handle_core_reboot(self, message):
         """
         Restart mycroft modules not the OS
         """
-        self.speak_dialog('restart.core')
+        self.speak_dialog('restart.core', {'users_word': ''.join([self.users_word, 'ing'])})
         time.sleep(2)
         path = join(self.core_path, 'start-core.sh all restart')
-        self.log.info(path)
         os.system(path)
 
     def handle_system_reboot(self, _):
@@ -94,6 +99,15 @@ class CoreSkill(Skill):
         if self.settings.get('verbal_feedback_enabled', True):
             self.speak_dialog('dismissed')
         self.log.info("User dismissed Mycroft.")
+
+    def handle_boot_finished(self):
+        self.speak_dialog('finished.booting')
+        self.log.debug('finished booting')
+
+    @intent_handler(IntentBuilder("").require("Stop"))
+    def handle_stop(self, event):
+        self.bus.emit(Message("core.stop"))
+        self.speak_dialog('dismissed')
 
     def shutdown(self):
         self.remove_event('core.shutdown', self.handle_core_shutdown)
