@@ -9,7 +9,7 @@ from adapt.intent import IntentBuilder
 from core.messagebus.message import Message
 from core.skills import Skill, intent_handler
 
-SECONDS = 5
+SECONDS = 6
 
 
 class CoreSkill(Skill):
@@ -43,6 +43,10 @@ class CoreSkill(Skill):
             self.bus.emit(Message("core.shutdown"))
         else:
             self.speak_dialog('dismissal.shutdown')
+
+    @intent_handler(IntentBuilder("").require("Mute").require("Microphone"))
+    def handle_microphone_mute(self, message):
+        self.bus.emit(Message("core.mic.mute"))
 
     def handle_response(self, message):
         """ Send notification to user that processing is longer than usual"""
