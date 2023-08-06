@@ -69,7 +69,8 @@ class CoreSkill(Skill):
         """
         Restart mycroft modules not the OS
         """
-        self.speak_dialog('restart.core', {'users_word': ''.join([self.users_word, 'ing'])})
+        self.speak_dialog('restart.core', {'users_word': ''.join([self.users_word,
+                                                                  'ing'])})
         time.sleep(2)
         path = join(self.core_path, 'start-core.sh all restart')
         os.system(path)
@@ -104,6 +105,7 @@ class CoreSkill(Skill):
         self.speak_dialog('finished.booting')
         self.log.debug('finished booting')
 
+    # HACK: hack to stop conversation from going on forever, a more efficient code required
     @intent_handler(IntentBuilder("").require("Stop"))
     def handle_stop(self, event):
         self.bus.emit(Message("core.stop"))
