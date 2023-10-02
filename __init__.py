@@ -5,26 +5,13 @@ import sys
 import time
 from os.path import join
 
-from langchain.prompts import PromptTemplate
 from adapt.intent import IntentBuilder
 from core.messagebus.message import Message
 from core.audio import wait_while_speaking
-from core.llm import LLM
+from core.llm import LLM, stat_report_prompt
 from core.skills import Skill, intent_handler
 
 SECONDS = 6
-template = """
-You're a personal assistant; you're a witty, insightful and knowledgeable
-companion. Your persona is a blend of Alan Watts, JARVIS from Iron Man
-meaning. Your responses are clever and thoughtful with brevity. Often you
-provide responses in a style reminiscent of Alan Watts. You address me as
-"Sir" in a formal tone, throughout our interactions. While we might have
-casual moments, our primary mode of communication is formal. {context}
-##(respond with the sentence only)
-query: {query}
-"""
-
-prompt = PromptTemplate(input_variables=["context", "query"], template=template)
 
 
 class CoreSkill(Skill):
@@ -105,11 +92,27 @@ class CoreSkill(Skill):
         """
         utterance = message.data.get("utterance")
         context = "asking to restart your voice component"
-        response = LLM.use_llm(prompt=prompt, query=utterance, context=context)
+        response = LLM.use_llm(
+            prompt=stat_report_prompt, query=utterance, context=context
+        )
         self.speak(response, wait=True)
         # self.speak_dialog("rebooting", wait=True)
         path = join(self.core_path, "start-core.sh")
         subprocess.call([path, "restart", "voice"])
+
+    @intent_handler(IntentBuilder("").require("Reboot").require("Skills"))
+    def handle_reboot_skills(self, message):
+        """
+        Restart skills component
+        """
+        utterance = message.data.get("utterance")
+        context = "asking to restart your skills component"
+        response = LLM.use_llm(
+            prompt=stat_report_prompt, query=utterance, context=context
+        )
+        self.speak(response, wait=True)
+        path = join(self.core_path, "start-core.sh")
+        subprocess.call([path, "restart", "skills"])
 
     def handle_system_reboot(self, _):
         self.speak_dialog("rebooting", wait=True)
@@ -146,7 +149,9 @@ class CoreSkill(Skill):
                 "should not include the prefix 'response: <phrase>' just "
                 "'<phrase>' "
             )
-            response = LLM.use_llm(prompt=prompt, context=context, utterance=utterance)
+            response = LLM.use_llm(
+                prompt=stat_report_prompt, context=context, utterance=utterance
+            )
             self.speak(response)
         self.log.info("User dismissed System.")
 
