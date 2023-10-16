@@ -8,7 +8,7 @@ from os.path import join
 from adapt.intent import IntentBuilder
 from core.messagebus.message import Message
 from core.audio import wait_while_speaking
-from core.llm import LLM, stat_report_prompt
+from core.llm import LLM, stat_report_prompt, dialog_prompt
 from core.skills import Skill, intent_handler
 
 SECONDS = 6
@@ -21,12 +21,61 @@ class CoreSkill(Skill):
     def initialize(self):
         core_path = os.path.join(os.path.dirname(sys.modules["core"].__file__), "..")
         self.core_path = os.path.abspath(core_path)
+        self.interrupted_utterance = None
         self.add_event("core.skills.initialized", self.handle_boot_finished)
         self.add_event("core.shutdown", self.handle_core_shutdown)
         self.add_event("core.reboot", self.handle_core_reboot)
         self.add_event("question:query", self.handle_response)
-        self.add_event("question:action", self.handle_output)
-        self.add_event("recognizer_loop:audio_output_start", self.handle_output)
+        self.add_event("question:action", self.handle_audio_output_start)
+        self.add_event(
+            "recognizer_loop:audio_output_start", self.handle_audio_output_start
+        )
+        self.add_event(
+            "recognizer_loop:audio_output_start", self.handle_audio_output_start
+        )
+        self.add_event("recognizer_loop:audio_output_end", self.handle_audio_output_end)
+        self.add_event("core.interrupted_utterance", self.set_interrupted_utterance)
+
+    # if after 5 seconds there's an interrupted utterance event, handle it
+    def handle_audio_output_end(self, event):
+        self.schedule_event(
+            self.handle_interrupted_utterance,
+            when=6,
+            name="handle_interrupted_utterance",
+        )
+
+    # TODO: add handle_output function here
+    # NOTE: might need to handle case where system is listening
+    def handle_audio_output_start(self, event):
+        self.cancel_scheduled_event("GiveMeAMinute")
+        self.cancel_scheduled_event("handle_interrupted_utterance")
+
+    def set_interrupted_utterance(self, message):
+        self.interrupted_utterance = message.data.get("utterance")
+
+    def handle_interrupted_utterance(self):
+        if self.interrupted_utterance:
+            self.log.debug(
+                f"Resuming interrupted utterance: {self.interrupted_utterance}"
+            )
+            context = (
+                "You were interrupted while saying the following utterance given in "
+                "the query. What you want to do complete the interrupted utterance. "
+                "An example, 'Sir like I was saying, ...' or"
+                "'As I was saying before we were interrupted, ...' or"
+                "'Where was I? Let me continue with what I was saying earlier...' "
+            )
+            interrupted_response = LLM.use_llm(
+                prompt=dialog_prompt, context=context, query=self.interrupted_utterance
+            )
+            wait_while_speaking()
+            # listen if dialog ends with question mark
+            if_question_mark = interrupted_response.endswith("?")
+            self.speak(interrupted_response, expect_response=if_question_mark)
+            # tts.store_interrupted_utterance(None)  # set interrupted_utterance None
+            self.cancel_scheduled_event("handle_interrupted_utterance")
+            self.bus.emit(Message("core.handled.interrupted_utterance"))
+            self.interrupted_utterance = None
 
     # change yes to a a Vocabulary for flexibility
     @intent_handler(IntentBuilder("").require("Reboot"))
@@ -58,9 +107,6 @@ class CoreSkill(Skill):
 
     def taking_too_long(self, event):
         self.bus.emit(Message("recognizer_loop:audio_output_timeout"))
-        self.cancel_scheduled_event("GiveMeAMinute")
-
-    def handle_output(self):
         self.cancel_scheduled_event("GiveMeAMinute")
 
     def handle_core_shutdown(self, message):
@@ -139,18 +185,22 @@ class CoreSkill(Skill):
 
     @intent_handler(IntentBuilder("dismiss.core").require("StopPhrase"))
     def handle_dismiss_intent(self, message):
+        self.interrupted_utterance = None
+        self.cancel_scheduled_event("handle_interrupted_utterance")
         if self.settings.get("verbal_feedback_enabled", True):
             # self.speak_dialog('dismissed')
             utterance = message.data.get("utterance")
             context = (
-                "Do not ask any question just give a remark to end the "
-                "conversation. Your reply should be ending the conversation, "
-                "'alright', 'okay' or something similar would do.the responses "
-                "should not include the prefix 'response: <phrase>' just "
-                "'<phrase>' "
+                "your goal is to intelligently conclude a conversation based on "
+                "the user's utterance. Your aim is to provide a satisfactory response "
+                "that effectively ends the dialogue. You should strive to craft a "
+                "response that is concise and clear, such as 'Alright' or 'Okay' "
+                "without initiating any new questions or topics. The purpose of your "
+                "response is to bring closure to the conversation without leaving any "
+                "loose ends."
             )
             response = LLM.use_llm(
-                prompt=stat_report_prompt, context=context, utterance=utterance
+                prompt=dialog_prompt, context=context, utterance=utterance
             )
             self.speak(response)
         self.log.info("User dismissed System.")

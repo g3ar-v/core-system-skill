@@ -1,10 +1,12 @@
 ## Core-system Skill
-This skill allows the user to turn off (or restart) core system, with a voice confirmation (yes). And contains core features for system. 
+the behavioural functions of the system.
 
 ## Features
-- A simple skill to shutdown/restart system by voice.
+- Shutdown/restart system by voice.
 - Manages "give me a second" remark during response latency
-- Speaks phrase, required by user
+- <s>speaks phrase, required by user</s>
+- handles interrupted speech later on
+- handles the dismissal of the system 
 
 ## Intent
  Intent | Combination of Vocabs |
@@ -12,6 +14,8 @@ This skill allows the user to turn off (or restart) core system, with a voice co
  Shutdown System | require("shutdown"), require("system")|
  Restart System |require("restart")|
  Mute microphone | require("mute"), optionally("microphone")|
+Dismissal| Nevermind, Forget it |
+
 
 
 ## Examples
