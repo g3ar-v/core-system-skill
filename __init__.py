@@ -6,9 +6,10 @@ import time
 from os.path import join
 
 from adapt.intent import IntentBuilder
-from core.messagebus.message import Message
+
 from core.audio import wait_while_speaking
-from core.llm import LLM, stat_report_prompt, dialog_prompt
+from core.llm import LLM, dialog_prompt, stat_report_prompt
+from core.messagebus.message import Message
 from core.skills import Skill, intent_handler
 
 SECONDS = 6
@@ -21,8 +22,10 @@ class CoreSkill(Skill):
     def initialize(self):
         core_path = os.path.join(os.path.dirname(sys.modules["core"].__file__), "..")
         self.core_path = os.path.abspath(core_path)
+        self.llm = LLM()
         self.interrupted_utterance = None
         self.add_event("core.skills.initialized", self.handle_boot_finished)
+        self.add_event("core.wakeword", self.handle_wakeword)
         self.add_event("core.shutdown", self.handle_core_shutdown)
         self.add_event("core.reboot", self.handle_core_reboot)
         self.add_event("question:query", self.handle_response)
@@ -36,11 +39,17 @@ class CoreSkill(Skill):
         self.add_event("recognizer_loop:audio_output_end", self.handle_audio_output_end)
         self.add_event("core.interrupted_utterance", self.set_interrupted_utterance)
 
-    # if after 5 seconds there's an interrupted utterance event, handle it
+    def handle_wakeword(self, message):
+        """handler for stop core when a new wakeword is called"""
+        self.bus.emit(Message("core.audio.speech.stop"))
+
+    # if after n seconds there's an interrupted utterance event, handle it
+    # NOTE: the processing time of the conversation might cause this to be handled while
+    # the new conversation is still ongoing
     def handle_audio_output_end(self, event):
         self.schedule_event(
             self.handle_interrupted_utterance,
-            when=6,
+            when=7,
             name="handle_interrupted_utterance",
         )
 
@@ -60,10 +69,10 @@ class CoreSkill(Skill):
             )
             context = (
                 "You were interrupted while saying the following utterance given in "
-                "the query. What you want to do complete the interrupted utterance. "
+                "the query. What you want to do is complete the interrupted utterance. "
                 "An example, 'Sir like I was saying, ...' or"
                 "'As I was saying before we were interrupted, ...' or"
-                "'Where was I? Let me continue with what I was saying earlier...' "
+                "'Sir, Where was I? ...' "
             )
             interrupted_response = LLM.use_llm(
                 prompt=dialog_prompt, context=context, query=self.interrupted_utterance
@@ -189,18 +198,19 @@ class CoreSkill(Skill):
         self.cancel_scheduled_event("handle_interrupted_utterance")
         if self.settings.get("verbal_feedback_enabled", True):
             # self.speak_dialog('dismissed')
-            utterance = message.data.get("utterance")
+            curr_conv = self.llm.chat_history.load_memory_variables({})["chat_history"]
             context = (
-                "your goal is to intelligently conclude a conversation based on "
-                "the user's utterance. Your aim is to provide a satisfactory response "
-                "that effectively ends the dialogue. You should strive to craft a "
-                "response that is concise and clear, such as 'Alright' or 'Okay' "
-                "without initiating any new questions or topics. The purpose of your "
-                "response is to bring closure to the conversation without leaving any "
-                "loose ends."
+                "your goal is to intelligently conclude the conversation based on the "
+                "previous conversations and users words. Your aim is to provide a "
+                "satisfactory response that effectively ends the dialogue. You should "
+                "strive to craft a response that is concise and clear, like 'Alright'"
+                "or 'Okay' without initiating any new questions or topics. "
+                "Do not use the phrase 'Is there anything else I can help you with?' "
+                "or similar questions. Instead, you could use the phrase "
+                "'Let me know if there is anything else I can assist with.'"
             )
             response = LLM.use_llm(
-                prompt=dialog_prompt, context=context, utterance=utterance
+                prompt=dialog_prompt, context=context, curr_conv=curr_conv
             )
             self.speak(response)
         self.log.info("User dismissed System.")
